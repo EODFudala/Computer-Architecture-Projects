@@ -180,7 +180,39 @@ unsigned int Fetch ( int addr) {
 
 /* Decode instr, returning decoded instruction. */
 void Decode ( unsigned int instr, DecodedInstr* d, RegVals* rVals) {
-    /* Your code goes here */
+    d->op = instr >> 26;
+    
+    /* creates bitmasks using the bitwise & operator. Allows us to isolate relevant
+     bits for each register */
+    int rsMask = (instr & 0x03e00000);
+    int rtMask = (instr & 0x001f0000);
+    int rdMask = (instr & 0x0000f800);
+    int shamtMask = (instr & 0x000007c0);
+    int functMask = (instr & 0x0000003f);
+    int addMask = (instr & 0x03ffffff);
+    int immMask = (instr & 0x0000ffff);
+
+    switch (d->op) {
+          case 0x00: // R-type
+            d->type = R;
+            /* shifts allow us to move isolated bits to rightmost position*/
+            rVals->R_rs = mips.registers[d->regs.r.rs = rsMask >> 21];
+            rVals->R_rt = mips.registers[d->regs.r.rt = rtMask >> 16];
+            rVals->R_rd = mips.registers[d->regs.r.rd = rdMask >> 11];
+            d->regs.r.shamt = shamtMask >> 6;
+            d->regs.r.funct = functMask;
+            break;
+          case 0x02:
+          case 0x03: // J-type
+              d->type = J;
+              d->regs.j.target = addMask;
+              break;
+          default: // I-type
+              d->type = I;
+              rVals->R_rs = mips.registers[d->regs.i.rs = rsMask >> 21];
+              rVals->R_rt = mips.registers[d->regs.i.rt = rtMask >> 16];
+              d->regs.i.addr_or_immed = immMask;
+      }
 }
 
 /*
@@ -188,13 +220,201 @@ void Decode ( unsigned int instr, DecodedInstr* d, RegVals* rVals) {
  *  followed by a newline.
  */
 void PrintInstruction ( DecodedInstr* d) {
-    /* Your code goes here */
+    char* i;
+    switch (d->op) {
+        case 0x00: //R Type
+            switch (d->regs.r.funct) {
+                case 0x20://add
+                    i = "add";
+                    break;
+                case 0x21://add unsigned
+                    i = "addu";
+                    break;
+                case 0x24://and
+                    i = "and";
+                    break;
+                case 0x08://jump register
+                    i = "jr";
+                    break;
+                case 0x27://nor
+                    i = "nor";
+                    break;
+                case 0x25://or
+                    i = "or";
+                    break;
+                case 0x2a://set less than
+                    i = "slt";
+                    break;
+                case 0x2b://set less than unsigned
+                    i = "sltu";
+                    break;
+                case 0x00://shift left logical
+                    i = "sll";
+                    break;
+                case 0x02://shift right logical
+                    i = "srl";
+                    break;
+                case 0x22://subtract
+                    i = "sub";
+                    break;
+                case 0x23://subtract unsigned
+                    i = "subu"
+                    break;
+                default:
+                    exit(1);
+            }
+            break;
+        case 0x02://jump
+            i = "j";
+            break;
+        case 0x03://jump and link
+            i = "jal";
+            break;
+        case 0x08://add immediate
+            i = "addi";
+            break;
+        case 0x09://add immediate unsigned
+            i = "addiu";
+            break;
+        case 0x0c://and immediate
+            i = "andi";
+            break;
+        case 0x04://branch on equal
+            i = "beq";
+            break;
+        case 0x05://branch on not equal
+            i = "bne";
+            break;
+        case 0x24://load byte unsigned
+            i = "lbu";
+            break;
+        case 0x25://load halfword unsigned
+            i = "lhu";
+            break;
+        case 0x30://load linked
+            i = "ll";
+            break;
+        case 0x0f://load upper immediate
+            i = "lui";
+            break;
+        case 0x23://load word
+            i = "lw";
+            break;
+        case 0x0d://or immediate
+            i = "ori";
+            break;
+        case 0x0a://set less than immediate
+            i = "slti";
+            break;
+        case 0x0b://set less than immediate unsigned
+            i = "sltiu";
+            break;
+        case 0x28://store byte
+            i = "sb";
+            break;
+        case 0x38://store conditional
+            i = "sc";
+            break;
+        case 0x29://store halfword
+            i = "sh";
+            break;
+        case 0x2b://store word
+            i = "sw";
+            break;
+        default:
+            exit(1);
+          }
+        
+          int rd = d->regs.r.rd;
+          int rs = d->regs.r.rs;
+          int rt = d->regs.r.rt;
+          short imm = d->regs.i.addr_or_immed;
+        
+          switch (d->type) {
+              case R:
+                  switch (d->regs.r.funct) {
+                      case 0x00://shift left logical
+                      case 0x02://shift right logical
+                          printf("%s\t$%d, $%d, %d\n", i, rd, rt, d->regs.r.shamt); return;
+                      case 0x08://jump register
+                          printf("%s\t$%d\n", i, rs);
+                          return;
+                      default:
+                          printf("%s\t$%d, $%d, $%d\n", i, rd, rs, rt);
+                          return;
+                  }
+              case J:
+                  printf("%s\t0x%.8x\n", i, (mips.pc & 0xf0000000) | ((d->regs.j.target << 2) & 0x0fffffff));
+                  return;
+              case I:
+                  switch (d->op) {
+                      case 0x04://branch on equal
+                      case 0x05://branch on not equal
+                          printf("%s\t$%d, $%d, 0x%.8x\n", i, rs, rt, mips.pc + 4 + (imm << 2));
+                          return;
+                      case 0x09://add immediate unsigned
+                          printf("%s\t$%d, $%d, %d\n", i, rt, rs, imm);
+                          return;
+                      case 0x0c://and immediate
+                      case 0x0d://or immediate
+                      case 0x0f://load upper immediate
+                          printf("%s\t$%d, $%d, 0x%x\n", i, rt, rs, (unsigned short)imm);
+                          return;
+                      case 0x23://load word
+                      case 0x2b://store word
+                          printf("%s\t$%d, %d($%d)\n", i, rt, imm, rs);
+                          return;
+                      }
+              }
 }
 
 /* Perform computation needed to execute d, returning computed value */
 int Execute ( DecodedInstr* d, RegVals* rVals) {
-    /* Your code goes here */
-  return 0;
+  switch (d->op) {
+          case 0x00;//R type
+              switch (d->regs.r.funct) {
+                  case 0x20://add
+                  case 0x21://add unsigned
+                      return rVals->R-rs + rVals->R_rt;
+                  case 0x08://jump register
+                      return rVals->R-rs;
+                  case 0x00://shift left logical
+                      return rVals->R_rt << d->regs.r.shamt;
+                  case 0x02://shift right logical
+                      return (unsigned int)rVals->R_rt >> d->regs.r.shamt;
+                 case 0x24://and
+                      return rVals->R_rs & rVals->R_rt;
+                  case 0x25://or
+                      return rVals->R_rs | rVals->R_rt;
+                  case 0x2a://set less than
+                      return rVals->R_rs < rVals->R_rt;
+                  case 0x22://subtract
+                  case 0x23://subtract unsigned
+                      return rVals->R_rs - rVals->R_rt;
+            }
+            break;
+        case 0x08://add immediate
+        case 0x09://add immediate unsigned
+            return rVals->R_rs + d->regs.i.addr_or_immed;
+        case 0x02://jump
+            break;
+        case 0x03://jump and link
+            return mips.pc + 4;
+        case 0x04://branch on equal
+            return rVals->R_rs == rVals->R_rt;
+        case 0x05://branch on not equal
+            return rVals->R_rs != rVals->R_rt;
+        case 0x0c://and immediate
+            return rVals->R_rs & d->regs.i.addr_or_immed;
+        case 0x0d://or immediate
+            return rVals->R_rs | d->regs.i.addr_or_immed;
+        case 0x0f://load upper immediate
+            return d->regs.i.addr_or_immed << 16;
+        case 0x23://load word
+        case 0x2b://store word
+            return rVals->R_rs + (short)d->regs.i.addr_or_immed;
+      }
+    return 0;
 }
 
 /* 
@@ -203,8 +423,28 @@ int Execute ( DecodedInstr* d, RegVals* rVals) {
  * increments by 4 (which we have provided).
  */
 void UpdatePC ( DecodedInstr* d, int val) {
-    mips.pc+=4;
-    /* Your code goes here */
+     mips.pc+=4;
+    
+    //Conditional statement to see if the program counter is within the approrpiate bounds. If not, program will exit
+     if(mips.pc < 0x00400000 || mips.pc > 0x00401000 || mips.pc % 4 != 0) {
+          exit(3);
+    }
+    //check if it is a jump register instruction
+    if (d->type == R && d->regs.r.funct == 0x08)/*funct value for jump register*/ {
+         mips.pc = mips.registers[d->regs.r.rs];
+    }
+    //if it isnt a jump register instruction, check if it is a beq or bne instructoin
+    else if (d->op == 0x04/*opcode for beq*/ || d->op == 0x05/*opcode for bne*/) {
+        //if the output of beq or bne is true increment pc counter by address
+        if (val) {
+           mips.pc += (short)d->regs.i.addr_or_immed;
+         }
+    }
+    //if it is not a jr, bne, or bew instruction, then it must be J type
+    else if (d->type == J) {
+        //using two bitmasks and the bitwise "or" operand, we can find the new value for the program counter after jump or jump and link
+        mips.pc = (mips.pc & 0xf0000000) | ((d->regs.j.target << 2) & 0x0fffffff);
+    }
 }
 
 /*
@@ -218,7 +458,24 @@ void UpdatePC ( DecodedInstr* d, int val) {
  *
  */
 int Mem( DecodedInstr* d, int val, int *changedMem) {
-    /* Your code goes here */
+    *changedMem = -1;
+    
+    if ((val < 0x00401000 || val > 0x00403fff) || val % 4 != 0) { //cheak if accessing invalid memory address or not word aligned
+      printf("Memory Access Exception at 0x%x: address 0x%x", mips.pc, val); //run test case to see if %x needs to be changed to %.8x
+      exit(0);
+    }
+    
+    switch (d->op){
+      case 0x23: //lw
+        return mips.memory[(val - 0x00400000) / 2];
+        
+      case 0x2b: //sw
+        *changedMem = val;
+        mips.memory[(val - 0x00400000) / 2] = mips.registers[d->regs.i.rt];
+        break;
+    }
+    
+    return val;
   return 0;
 }
 
@@ -229,5 +486,20 @@ int Mem( DecodedInstr* d, int val, int *changedMem) {
  * otherwise put -1 in *changedReg.
  */
 void RegWrite( DecodedInstr* d, int val, int *changedReg) {
-    /* Your code goes here */
+    switch (d->type) { //type should be saved but need to run test to make sure, if not will change switch and cases
+          case R:
+        *changedReg = d->regs.r.rd;
+              mips.registers[d->regs.r.rd] = val;
+              return;
+        
+      case J:
+        *changedReg = 31;
+              mips.registers[31] = val;
+              return;
+        
+      case I:
+        *changedReg = d->regs.i.rt;
+              mips.registers[d->regs.i.rt] = val;
+              return;
+    }
 }
