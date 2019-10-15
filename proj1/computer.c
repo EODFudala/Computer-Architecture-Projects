@@ -258,7 +258,7 @@ void PrintInstruction ( DecodedInstr* d) {
                     i = "sub";
                     break;
                 case 0x23://subtract unsigned
-                    i = "subu"
+                    i = "subu";
                     break;
                 default:
                     exit(1);
@@ -371,13 +371,13 @@ void PrintInstruction ( DecodedInstr* d) {
 /* Perform computation needed to execute d, returning computed value */
 int Execute ( DecodedInstr* d, RegVals* rVals) {
   switch (d->op) {
-          case 0x00;//R type
+      case 0x00://R type
               switch (d->regs.r.funct) {
                   case 0x20://add
                   case 0x21://add unsigned
-                      return rVals->R-rs + rVals->R_rt;
+                      return rVals->R_rs + rVals->R_rt;
                   case 0x08://jump register
-                      return rVals->R-rs;
+                      return rVals->R_rs;
                   case 0x00://shift left logical
                       return rVals->R_rt << d->regs.r.shamt;
                   case 0x02://shift right logical
@@ -458,26 +458,26 @@ void UpdatePC ( DecodedInstr* d, int val) {
  *
  */
 int Mem( DecodedInstr* d, int val, int *changedMem) {
-    *changedMem = -1;
-    
-    if ((val < 0x00401000 || val > 0x00403fff) || val % 4 != 0) { //cheak if accessing invalid memory address or not word aligned
-      printf("Memory Access Exception at 0x%x: address 0x%x", mips.pc, val); //run test case to see if %x needs to be changed to %.8x
-      exit(0);
-    }
-    
-    switch (d->op){
-      case 0x23: //lw
-        return mips.memory[(val - 0x00400000) / 2];
+        *changedMem = -1;
         
-      case 0x2b: //sw
-        *changedMem = val;
-        mips.memory[(val - 0x00400000) / 2] = mips.registers[d->regs.i.rt];
-        break;
+        if ((d->op == 0x23 || d->op == 0x2b) && (val < 0x00401000 || val > 0x00403fff) || val % 4 != 0) { //cheak if accessing invalid memory address or not word aligned
+          printf("Memory Access Exception at 0x%.8x: address 0x%.8x", mips.pc, val); //run test case to see if %x needs to be changed to %.8x
+          exit(0);
+        }
+        
+        switch (d->op){
+          case 0x23: //lw
+            return mips.memory[(val - 0x00400000) / 2];
+            
+          case 0x2b: //sw
+            *changedMem = val;
+            mips.memory[(val - 0x00400000) / 2] = mips.registers[d->regs.i.rt];
+            break;
+        }
+        
+        return val;
+      return 0;
     }
-    
-    return val;
-  return 0;
-}
 
 /* 
  * Write back to register. If the instruction modified a register--
