@@ -78,9 +78,24 @@ void init_lru(int assoc_index, int block_index)
               if we == WRITE, then data used to
               update Cache/DRAM
 */
+
 void accessMemory(address addr, word* data, WriteEnable we)
 {
   /* Declare variables here */
+    unsigned int tag;
+    unsigned int tagSize;
+    unsigned int index;
+    unsigned int indexSize;
+    unsigned int offset;
+    unsigned int offsetSize;
+    unsigned int Hit = 0;
+    unsigned int indexLRU = 0;
+    unsigned int counterLRU = 0;
+    
+    //creates instance of address named outdatedAd to represent teh recently replaced address
+    address outdatedAd = 0;
+    //creates a transfer unit named byteSize and set to default value 0
+    TransferUnit byteSize = 0;
 
   /* handle the case of no cache at all - leave this in */
   if(assoc == 0) {
@@ -117,6 +132,35 @@ void accessMemory(address addr, word* data, WriteEnable we)
 
   /* Start adding code here */
 
+    offsetSize = uint_log2(block_size);
+    indexSize = uint_log2(set_count);
+    
+    //index is the difference of total size(32) - index - offset
+    tagSize = 32 - indexSize - offsetSize;
+    
+    offset = (addr) & ((1 << offsetSize) - 1);
+    index = (addr >> offsetSize) & ( (1 << indexSize) - 1);
+    tag = addr >> (offsetSize + indexSize);
+    
+    if (block_size == 4){
+        byteSize = 2;
+    }
+    else if (block_size == 8) {
+        byteSize = 3;
+    }
+    else if (block_size == 16) {
+        byteSize = 4;
+    }
+    else if (block_size == 32) {
+        byteSize = 5;
+    }
+    else {
+        printf("ERROR: Invalid Block Size!");
+    }
+    
+    if (policy == LRU) {
+        
+    }
 
   /* This call to accessDRAM occurs when you modify any of the
      cache parameters. It is provided as a stop gap solution.
