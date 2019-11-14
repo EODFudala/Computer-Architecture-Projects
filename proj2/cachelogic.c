@@ -3,7 +3,7 @@
 /* The following two functions are defined in util.c */
 
 /* finds the highest 1 bit, and returns its position, else 0xFFFFFFFF */
-unsigned int uint_log2(word w); 
+unsigned int uint_log2(word w);
 
 /* return random int from 0..x-1 */
 int randomint( int x );
@@ -78,7 +78,45 @@ void init_lru(int assoc_index, int block_index)
               if we == WRITE, then data used to
               update Cache/DRAM
 */
+unsigned int HitHandler (unsigned int tag, unsigned int index, unsigned int offset, int n, unsigned int Hit, word* data) {
+    if (cache[index].block[n].valid == 1) {
+        if (tag == cache[index].block[n].tag) {
+            cache[index].block[n].lru.value = 0;
+            cache[index].block[n].valid = 1;
+            Hit = 1;
+            memcpy(data,(cache[index].block[n].data + offset), 4);
+        }
+    }
+    return Hit;
+}
 
+unsigned int HitHandler_Write (unsigned int tag, unsigned int index, unsigned int offset, int n, unsigned int Hit, word* data) {
+    if (cache[index].block[n].valid == 1) {
+        if (tag == cache[index].block[n].tag) {
+          memcpy ((cache[index].block[n].data + offset),data, 4);
+                    cache[index].block[n].dirty = DIRTY;
+                    cache[index].block[n].lru.value = 0;
+                    cache[index].block[n].valid = 1;
+                    Hit = 1;
+        }
+    }
+    return Hit;
+}
+
+unsigned int HitHandler_WriteThrough (unsigned int tag, unsigned int index, unsigned int offset, int n, unsigned int Hit, word* data, unsigned int counterLRU, TransferUnit* byteSize, address addr) {
+    if (cache[index].block[n].valid == 1) {
+        if (tag == cache[index].block[n].tag) {
+          memcpy ((cache[index].block[n].data + offset),data, 4);
+                    cache[index].block[n].dirty = VIRGIN;
+                    cache[index].block[n].lru.value = 0;
+                    cache[index].block[n].valid = 1;
+                    Hit = 1;
+          accessDRAM(addr, (cache[index].block[counterLRU].data), *byteSize, WRITE);
+        }
+    }
+    return Hit;
+}
+  
 //Function to Handle Hits. Returns Hit value regardless if hit happened
 unsigned int HitHandler_Read (unsigned int tag, unsigned int index, unsigned int offset, int n, unsigned int Hit, word* data) {
     if (cache[index].block[n].valid == 1) {
@@ -93,10 +131,10 @@ unsigned int HitHandler_Read (unsigned int tag, unsigned int index, unsigned int
 }
 
 //Function that handles the checks for dirty bit and "cleans up" if it exists
-void CleanUp (unsigned int index, unsigned int counterLRU, unsigned int indexSize, unsigned int offsetSize, TransferUnit* byteSize) {
+void CleanUp (unsigned int index, unsigned int counterLRU, unsigned int indexSize, unsigned int offsetSize, TransferUnit byteSize) {
     address outdatedAd = 0;
     if (cache[index].block[counterLRU].dirty == DIRTY) {
-        outdatedAd = cache[index].block[counterLRU].tag << (indexSize + offsetSize) + (index << offsetSize);
+        outdatedAd = cache[index].block[counterLRU].tag << ((indexSize + offsetSize) + (index << offsetSize));
         accessDRAM(outdatedAd, (cache[index].block[counterLRU].data), byteSize, WRITE);
     }
 }
@@ -191,7 +229,7 @@ void accessMemory(address addr, word* data, WriteEnable we)
         printf("ERROR: Invalid Block Size!");
     }
     
-    if (ReplacementPolicy == LRU) {
+    if (policy == LRU) {
     //sets the value for lru in relaiton to the associativity
         for (int i = 0; i < assoc; i++) {
             cache[index].block[i].lru.value++;
@@ -201,12 +239,12 @@ void accessMemory(address addr, word* data, WriteEnable we)
     switch (we) {
         case READ:
             Hit = 0;
-            for (i = 0; i < assoc; i++) {
-               Hit = HitHandler(tag, index, offset, i, data, Hit);
+            for (int i = 0; i < assoc; i++) {
+               Hit = HitHandler_Read(tag, index, offset, i, Hit, data);
             }
             //If it is a miss
             if (Hit == 0) {
-                switch (ReplacementPolicy) {
+                switch (policy) {
                     case LRU:
                         for (int i = 0; i < assoc; i++) {
                             if (valueLRU < cache[index].block[i].lru.value) {
@@ -232,18 +270,73 @@ void accessMemory(address addr, word* data, WriteEnable we)
             break;
           
         case WRITE:
-            
+            Hit = 0;
+                if (memory_sync_policy == WRITE_BACK) {
+                    for (int i = 0; i < assoc; i++) {
+                Hit = HitHandler_Write(tag, index, offset, i, Hit, data);
+              }
+              
+              if (Hit == 0) {
+                switch (policy) {
+                  case LRU:
+                    for (int i = 0; i < assoc; i++) {
+                      if (valueLRU < cache[index].block[i].lru.value) {
+                        counterLRU = i;
+                        valueLRU = cache[index].block[i].lru.value;
+                      }
+                    }
+
+                  case RANDOM:
+                    counterLRU = assoc;
+                    break;
+
+                  default:
+                    printf("Replacement policy is not supported");
+                    break;
+                }
+
+                CleanUp(index, counterLRU, indexSize, offsetSize, byteSize);
+                SetVirg(index, counterLRU, tag);
+                accessDRAM(addr, (cache[index].block[counterLRU].data), byteSize, READ);
+                memcpy((cache[index].block[counterLRU].data + offset),data, 4);
+              }
+              
+            } else {
+              for (int i = 0; i < assoc; i++) {
+                Hit = HitHandler_WriteThrough(tag, index, offset, i, Hit, data, counterLRU, &byteSize, addr);
+              }
+              
+              if(Hit == 0){
+                switch (policy){
+                  case LRU:
+                    for (int i = 0; i < assoc; i++) {
+                      if (valueLRU < cache[index].block[i].lru.value) {
+                        counterLRU = i;
+                        valueLRU = cache[index].block[i].lru.value;
+                      }
+                    }
+                    
+                case RANDOM:
+                    counterLRU = assoc;
+                    break;
+                default:
+                        printf("LFU is not implemented");
+                        break;
+                        
+                }
+                
+                accessDRAM(addr, (cache[index].block[counterLRU].data), byteSize, READ);
+                SetVirg(index, counterLRU, tag);
+                memcpy ((cache[index].block[counterLRU].data + offset),data, 4);
+              }
+              
+            }
+              
             break;
         
         default:
             printf("WriteEnable is not supported");
             break;
     }
-
-  /* This call to accessDRAM occurs when you modify any of the
-     cache parameters. It is provided as a stop gap solution.
-     At some point, ONCE YOU HAVE MORE OF YOUR CACHELOGIC IN PLACE,
-     THIS LINE SHOULD BE REMOVED.
-  */
-  accessDRAM(addr, (byte*)data, WORD_SIZE, we);
+  
 }
