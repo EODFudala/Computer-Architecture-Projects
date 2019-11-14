@@ -79,6 +79,35 @@ void init_lru(int assoc_index, int block_index)
               update Cache/DRAM
 */
 
+//Function to Handle Hits. Returns Hit value regardless if hit happened
+unsigned int HitHandler_Read (unsigned int tag, unsigned int index, unsigned int offset, int n, unsigned int Hit, word* data) {
+    if (cache[index].block[n].valid == 1) {
+        if (tag == cache[index].block[n].tag) {
+            cache[index].block[n].lru.value = 0;
+            cache[index].block[n].valid = 1;
+            Hit = 1;
+            memcpy(data,(cache[index].block[n].data + offset), 4);
+        }
+    }
+    return Hit;
+}
+
+//Function that handles the checks for dirty bit and "cleans up" if it exists
+void CleanUp (unsigned int index, unsigned int counterLRU, unsigned int indexSize, unsigned int offsetSize, TransferUnit* byteSize) {
+    address outdatedAd = 0;
+    if (cache[index].block[counterLRU].dirty == DIRTY) {
+        outdatedAd = cache[index].block[counterLRU].tag << (indexSize + offsetSize) + (index << offsetSize);
+        accessDRAM(outdatedAd, (cache[index].block[counterLRU].data), byteSize, WRITE);
+    }
+}
+
+void SetVirg (unsigned int index, unsigned int counterLRU, unsigned int tag) {
+    cache[index].block[counterLRU].lru.value = 0;
+    cache[index].block[counterLRU].valid = 1;
+    cache[index].block[counterLRU].dirty = VIRGIN;
+    cache[index].block[counterLRU].tag = tag;
+}
+
 void accessMemory(address addr, word* data, WriteEnable we)
 {
   /* Declare variables here */
@@ -89,11 +118,9 @@ void accessMemory(address addr, word* data, WriteEnable we)
     unsigned int offset;
     unsigned int offsetSize;
     unsigned int Hit = 0;
-    unsigned int indexLRU = 0;
     unsigned int counterLRU = 0;
+    unsigned int valueLRU = 0;
     
-    //creates instance of address named outdatedAd to represent teh recently replaced address
-    address outdatedAd = 0;
     //creates a transfer unit named byteSize and set to default value 0
     TransferUnit byteSize = 0;
 
@@ -142,7 +169,13 @@ void accessMemory(address addr, word* data, WriteEnable we)
     index = (addr >> offsetSize) & ( (1 << indexSize) - 1);
     tag = addr >> (offsetSize + indexSize);
     
-    if (block_size == 4){
+    if (block_size == 1) {
+        byteSize = 0;
+    }
+    else if (block_size == 2) {
+        byteSize = 1;
+    }
+    else if (block_size == 4){
         byteSize = 2;
     }
     else if (block_size == 8) {
@@ -158,8 +191,53 @@ void accessMemory(address addr, word* data, WriteEnable we)
         printf("ERROR: Invalid Block Size!");
     }
     
-    if (policy == LRU) {
+    if (ReplacementPolicy == LRU) {
+    //sets the value for lru in relaiton to the associativity
+        for (int i = 0; i < assoc; i++) {
+            cache[index].block[i].lru.value++;
+        }
+    }
+    
+    switch (we) {
+        case READ:
+            Hit = 0;
+            for (i = 0; i < assoc; i++) {
+               Hit = HitHandler(tag, index, offset, i, data, Hit);
+            }
+            //If it is a miss
+            if (Hit == 0) {
+                switch (ReplacementPolicy) {
+                    case LRU:
+                        for (int i = 0; i < assoc; i++) {
+                            if (valueLRU < cache[index].block[i].lru.value) {
+                                counterLRU = i;
+                                valueLRU = cache[index].block[i].lru.value;
+                            }
+                        }
+                        break;
+                   //Not truly random, but random enough for my liking :P
+                    case RANDOM:
+                        counterLRU = assoc;
+                        break;
+                    
+                   //LFU policy is not implemented because it is out of the scope of this project
+                    default:
+                        printf("Replacement policy is not supported");
+                        break;
+                }
+            }
+            CleanUp(index, counterLRU, indexSize, offsetSize, byteSize);
+            SetVirg(index, counterLRU, tag);
+            memcpy(data, (cache[index].block[counterLRU].data + offset), 4);
+            break;
+          
+        case WRITE:
+            
+            break;
         
+        default:
+            printf("WriteEnable is not supported");
+            break;
     }
 
   /* This call to accessDRAM occurs when you modify any of the
