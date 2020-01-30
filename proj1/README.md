@@ -27,7 +27,7 @@ It is important that we have all the other bytes set to 0, because when we use t
 ```
 Once we have applied the “bitmask”, we simply shift the bytes respectively. For Rs, we would have a shift of 21 bits because we only care about bits 25-21. For Rt we would shift 16, Rd would shift 11, and Shamt would shift 6. Funct would still require a mask, but would not need to be shifted for it is already the rightmost bit.
 
-**Psuedocode:
+**Psuedocode:**
 ```
 Decode ( unsigned int instr, DecodedInstr* d, RegVals* rVals) {
 d->op = instr >> 26;
@@ -73,7 +73,7 @@ Addiu	$4, $0, 3
 Jal 0x00400010
 ```
 * **Structure of Solution:** To print the instructions correctly, we will use a variable char i to store the name of the instruction used. Using a switch, we can check the op portion of the d struct and save the name of the instruction in the i variable. After all the stores have been done, we can print a standard phrase with appropriate indentation and variable names
-**Psuedocode:
+**Psuedocode:**
 ```
 Char i;	
 switch(d->op)
@@ -87,7 +87,7 @@ Print(specified message for R, I, J type
 ### Execute:
 * **Correctness Constraint:** Function should identify instructions that require the ALU, simulate them, and return the value of the operation
 * **Structure of Solution:** With the use of several switch cases, we can identify the types of instructions that are in d->op and only write conditions for those operations that require the ALU. Once those instructions are identified, the value of the operation indicated by the instruction is performed and then returned.
-**Psuedocode:
+**Psuedocode:**
 ```
 switch(d->op)
 		Case 0x09 addiu
@@ -104,7 +104,7 @@ switch(d->op)
 * **Structure of Solution:** Since most instructions just require an increment of 4, at the beginning of the function, we can increment by four. Additionally, four conditional statements are needed to check for when a beq or bne occurs, a J-type instruction occurs,  a jump register occurs, or when pc is out of bounds.
 Bne and new can be in the same conditional, because as long as the val returned by execute is true, then they have the same effect on program counter.
 In the conditional handling whether or not the program counter has exceeded the bounds, we can also include “mips.pc % 4 != 0” to ensure that the program counter adheres to the architecture of memory even if it is inside of the legal bounds.
-**Psuedocode:
+**Psuedocode:**
 ```
 Mips.pc += 4;
 	if(beq or bne)
@@ -130,7 +130,7 @@ Mips.pc += 4;
 * Must be word aligned
 
 * **Structure of Solution:** The solution will first check if the given value is assessing invalid memory addresses or is not word aligned. It will then assign -1 to changedMem and check if the opcode is either a load or save. If it is it will perform the corresponding action.
-**Psuedocode:
+**Psuedocode:**
 ```
 if ((val < 0x00401000 || val > 0x00403fff) || val % 4 != 0) {
 printf("Memory Access Exception at 0x%.8x: address 0x%.8x", mips.pc, val);
@@ -161,7 +161,7 @@ switch (d->op){
 * If J-type assign mips.registers[] to 31
 
 * **Structure of Solution:** See if the opcode is an R, J, or I type and then assign changedReg and mips.registers to the corresponding opcode type. If the opcode is jal then assign to 31. If none then make changedReg = -1.
-**Psuedocode:
+**Psuedocode:**
 ```
 changedReg = -1;
   switch (d->opcode) { 
