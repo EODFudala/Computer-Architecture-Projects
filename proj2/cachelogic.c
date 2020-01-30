@@ -80,11 +80,11 @@ void init_lru(int assoc_index, int block_index)
 */
 
 //Helper function that sets a bit to 0 (aka dirty or virgin)
-void SetVirg(unsigned int index, unsigned int counterLRU, unsigned int tag) {
-    cache[index].block[counterLRU].lru.value = 0;
-    cache[index].block[counterLRU].valid = 1;
-    cache[index].block[counterLRU].dirty = VIRGIN;
-    cache[index].block[counterLRU].tag = tag;
+void SetVirg(unsigned int index, unsigned int valueLRU, unsigned int tag) {
+    cache[index].block[valueLRU].lru.value = 0;
+    cache[index].block[valueLRU].valid = 1;
+    cache[index].block[valueLRU].dirty = VIRGIN;
+    cache[index].block[valueLRU].tag = tag;
 }
 
 void accessMemory(address addr, word* data, WriteEnable we)
