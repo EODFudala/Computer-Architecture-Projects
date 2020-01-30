@@ -4,3 +4,7 @@ Listed are the three projects that were assigned to me through CSE 140, Computer
 
 * [Course Syllabus](CSE140_F19_syllabus.pdf)
 
+## Built With
+
+* C Programming Language
+* MIPS Assembly language - Using [MARS](http://courses.missouristate.edu/KenVollmar/mars/) IDE
